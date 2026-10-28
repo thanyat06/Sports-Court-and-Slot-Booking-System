@@ -17,7 +17,7 @@ public class BookingService
             ?? throw new ArgumentNullException(nameof(repository));
     }
 
-    // Create a booking after validating customer details and duration.
+    // 1. Create a booking
     public async Task<int> CreateAsync(Booking booking)
     {
         ArgumentNullException.ThrowIfNull(booking);
@@ -30,20 +30,24 @@ public class BookingService
         return await _repository.CreateBookingAsync(booking);
     }
 
-    // Retrieve one booking.
-    public async Task<Booking?> GetByIdAsync(int bookingId)
-    {
-        if (bookingId <= 0)
-            throw new ArgumentOutOfRangeException(
-                nameof(bookingId), "Booking ID must be greater than zero.");
-
-        return await _repository.GetByIdAsync(bookingId);
-    }
-
-    // Retrieve all bookings.
+    // 2. Get all bookings
     public async Task<List<Booking>> GetAllAsync()
     {
         return await _repository.GetAllAsync();
+    }
+
+    // 3. Get a booking by ID
+    public async Task<Booking?> GetByIdAsync(int bookingId)
+    {
+        ValidateBookingId(bookingId);
+        return await _repository.GetByIdAsync(bookingId);
+    }
+
+    // 4. Cancel a booking
+    public async Task<bool> CancelAsync(int bookingId)
+    {
+        ValidateBookingId(bookingId);
+        return await _repository.CancelBookingAsync(bookingId);
     }
 
     private static void ValidateBooking(Booking booking)
@@ -51,19 +55,15 @@ public class BookingService
         if (booking.CourtId <= 0)
             throw new ArgumentException("Select a valid court.");
 
-        if (string.IsNullOrWhiteSpace(booking.CustomerName))
-            throw new ArgumentException("Customer name is required.");
-
-        if (booking.CustomerName.Trim().Length > 100)
+        if (string.IsNullOrWhiteSpace(booking.CustomerName) ||
+            booking.CustomerName.Trim().Length > 100)
             throw new ArgumentException(
-                "Customer name cannot exceed 100 characters.");
+                "Customer name is required and must not exceed 100 characters.");
 
-        if (string.IsNullOrWhiteSpace(booking.CustomerPhone))
-            throw new ArgumentException("Customer phone is required.");
-
-        if (booking.CustomerPhone.Trim().Length > 25)
+        if (string.IsNullOrWhiteSpace(booking.CustomerPhone) ||
+            booking.CustomerPhone.Trim().Length > 25)
             throw new ArgumentException(
-                "Customer phone cannot exceed 25 characters.");
+                "Customer phone is required and must not exceed 25 characters.");
 
         if (booking.BookingDate.Date < DateTime.Today)
             throw new ArgumentException(
@@ -73,17 +73,12 @@ public class BookingService
             booking.StartTime >= TimeSpan.FromHours(24) ||
             booking.EndTime > TimeSpan.FromHours(24) ||
             booking.EndTime <= booking.StartTime)
-        {
-            throw new ArgumentException(
-                "Enter a valid booking time.");
-        }
+            throw new ArgumentException("Invalid booking time.");
 
         if (booking.StartTime.Ticks % TimeSpan.TicksPerHour != 0 ||
             booking.EndTime.Ticks % TimeSpan.TicksPerHour != 0)
-        {
             throw new ArgumentException(
                 "Booking times must be on whole-hour boundaries.");
-        }
 
         int expectedSlotCount =
             (int)((booking.EndTime - booking.StartTime).TotalHours);
@@ -93,24 +88,10 @@ public class BookingService
                 "Slot count does not match the booking duration.");
     }
 
-
-    public async Task<bool> ConfirmAsync(int bookingId)
-    {
-        ValidateBookingId(bookingId);
-        return await _repository.ConfirmBookingAsync(bookingId);
-    }
-
-    public async Task<bool> CancelAsync(int bookingId)
-    {
-        ValidateBookingId(bookingId);
-        return await _repository.CancelBookingAsync(bookingId);
-    }
-
     private static void ValidateBookingId(int bookingId)
     {
         if (bookingId <= 0)
             throw new ArgumentOutOfRangeException(
                 nameof(bookingId), "Booking ID must be greater than zero.");
     }
-
 }

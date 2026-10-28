@@ -11,10 +11,6 @@ namespace SportsCourtBooking.Repositories;
 public class BookingRepository
 {
 
-    public Task<bool> ConfirmBookingAsync(int bookingId);
-
-    public Task<bool> CancelBookingAsync(int bookingId);
-
     // 1. Get one booking by its ID
     public async Task<Booking?> GetByIdAsync(int bookingId)
     {
@@ -344,5 +340,116 @@ public class BookingRepository
             throw;
         }
     }
+
+
+    public async Task<bool> CancelBookingAsync(int bookingId)
+    {
+        using SqlConnection connection = DatabaseHelper.CreateConnection();
+        await connection.OpenAsync();
+
+        using SqlTransaction transaction =
+            connection.BeginTransaction(IsolationLevel.Serializable);
+
+        try
+        {
+            const string checkQuery = @"
+            SELECT b.BookingStatus, p.PaymentStatus
+            FROM Bookings b WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN Payments p WITH (UPDLOCK, HOLDLOCK)
+                ON b.BookingId = p.BookingId
+            WHERE b.BookingId = @BookingId;";
+
+            string? bookingStatus = null;
+            string? paymentStatus = null;
+
+            using (SqlCommand command =
+                   new SqlCommand(checkQuery, connection, transaction))
+            {
+                command.Parameters.Add("@BookingId", SqlDbType.Int).Value =
+                    bookingId;
+
+                using SqlDataReader reader = await command.ExecuteReaderAsync();
+
+                if (await reader.ReadAsync())
+                {
+                    bookingStatus = reader.GetString(0);
+                    paymentStatus = reader.GetString(1);
+                }
+            }
+
+            // Booking or its payment record does not exist.
+            if (bookingStatus is null || paymentStatus is null)
+            {
+                transaction.Rollback();
+                return false;
+            }
+
+            // Do not cancel an already cancelled booking.
+            if (bookingStatus == "Cancelled")
+            {
+                transaction.Rollback();
+                return false;
+            }
+
+            // Never cancel a booking after payment has been collected.
+            if (paymentStatus == "Paid")
+            {
+                transaction.Rollback();
+                return false;
+            }
+
+            const string cancelQuery = @"
+            UPDATE Bookings
+            SET BookingStatus = 'Cancelled'
+            WHERE BookingId = @BookingId
+              AND BookingStatus IN ('Pending', 'Confirmed');";
+
+            using (SqlCommand command =
+                   new SqlCommand(cancelQuery, connection, transaction))
+            {
+                command.Parameters.Add("@BookingId", SqlDbType.Int).Value =
+                    bookingId;
+
+                if (await command.ExecuteNonQueryAsync() != 1)
+                {
+                    transaction.Rollback();
+                    return false;
+                }
+            }
+
+            const string releaseSlotsQuery = @"
+            UPDATE Slots
+            SET SlotStatus = 'Available',
+                BookingId = NULL
+            WHERE BookingId = @BookingId
+              AND SlotStatus = 'Reserved';";
+
+            using (SqlCommand command =
+                   new SqlCommand(releaseSlotsQuery, connection, transaction))
+            {
+                command.Parameters.Add("@BookingId", SqlDbType.Int).Value =
+                    bookingId;
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            transaction.Commit();
+            return true;
+        }
+        catch
+        {
+            try
+            {
+                transaction.Rollback();
+            }
+            catch
+            {
+                // Preserve the original exception.
+            }
+
+            throw;
+        }
+    }
+
 
 }
