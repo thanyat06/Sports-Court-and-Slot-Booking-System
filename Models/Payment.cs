@@ -2,9 +2,15 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Sports_Court___Slot_Booking_System.Models
+namespace SportsCourtBooking.Models;
+
+public class Payment
 {
-    internal class Payment
-    {
-    }
+    public int PaymentId { get; set; }
+    public int BookingId { get; set; }
+    public decimal Amount { get; set; }
+    public string PaymentMethod { get; set; } = "Cash";
+    public string PaymentStatus { get; set; } = "Pending";
+    public DateTime? CollectedAt { get; set; }
+    public string? Notes { get; set; }
 }

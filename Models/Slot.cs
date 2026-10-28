@@ -2,9 +2,15 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Sports_Court___Slot_Booking_System.Models
+namespace SportsCourtBooking.Models;
+
+public class Slot
 {
-    internal class Slot
-    {
-    }
+    public int SlotId { get; set; }
+    public int CourtId { get; set; }
+    public DateTime SlotDate { get; set; }
+    public TimeSpan StartTime { get; set; }
+    public TimeSpan EndTime { get; set; }
+    public string SlotStatus { get; set; } = "Available";
+    public int? BookingId { get; set; }
 }
